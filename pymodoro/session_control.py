@@ -1,12 +1,18 @@
 from typing import List, Optional
+import re
 import os
 import datetime
 import sys
 import random
 import string
+
+import numpy as np
+import matplotlib.pyplot as plt
 from . import configuration
 
 DATE_FORMAT: str = "%H:%M:%S"
+DATE_FORMAT_LOG: str = "%d/%m - %H:%M:%S"
+DATE_FORMAT_SHOW: str = "%d/%m - %A - %H:%M:%S"
 
 
 class Session():
@@ -50,7 +56,10 @@ class Session():
             self.ID = content
 
             content = f.readline()
-            self.CREATION_DATE = datetime.datetime.strptime(content.strip("\n"), DATE_FORMAT)
+            self.CREATION_DATE = datetime.datetime.strptime(
+                content.strip("\n"),
+                DATE_FORMAT
+            )
 
             content = f.readline()
             self.WORK, self.REST = list(map(int, content.split(" ")))
@@ -118,26 +127,160 @@ class Session():
         return None
 
 
-def log(log_path: str, message):
+def log(log_path: str, message, date=datetime.datetime.now()):
     with open(log_path, 'a') as f:
-        now = datetime.datetime.now()
-        now_str = now.strftime("%d/%m - %H:%M:%S")
+
+        now_str = date.strftime(DATE_FORMAT_LOG)
         f.write(f"[{now_str}] {message}\n")
+
+
+def check_entries(config, past_days=7, identifier: str = "research", Verbose: int = 1) -> List[int]:
+    now = datetime.datetime.now()
+    Dates = []
+    with open(config.log_path, 'r', encoding='utf-8') as f:
+        for line in f.readlines():
+            res = re.findall(rf"\[([\d -:]+)\] {identifier} session.", line)
+            if res:
+                date = datetime.datetime.strptime(res[0], DATE_FORMAT_LOG)
+                Dates.append(date)
+
+    YEAR = now.year
+    for i, date in enumerate(Dates):
+        if not i:
+            continue
+        if date.month < Dates[i - 1].month:
+            YEAR += 1
+        Dates[i] = Dates[i].replace(year=YEAR)
+        
+    year_adjust = YEAR - now.year
+    Dates = [d.replace(year=d.year - year_adjust) for d in Dates]
+
+    Results = []
+    for day in range(past_days, -1, -1):
+        moment = now - datetime.timedelta(hours=24*day)
+        res = check_entries_day(Dates, moment, Verbose)
+        Results.append(res)
+
+    return Results
+
+
+def same_day(dates=List[datetime.datetime]) -> bool:
+    return len(list(set([(d.day, d.month, d.year) for d in dates]))) == 1
+
+
+def check_entries_day(Dates, moment, Verbose: int = 1) -> int:
+
+    INTERVAL_MIN = 20
+    HOUR_LIMIT = 7
+
+    CurrentDates = []
+    for d, date in enumerate(Dates):
+        if d:
+            OLD = (date - Dates[d - 1]).seconds / 60 > INTERVAL_MIN
+
+            if not OLD:
+                continue
+
+        shifted = moment - datetime.timedelta(hours=HOUR_LIMIT)
+        yesterday = moment - datetime.timedelta(hours=24)
+        tomorrow = moment + datetime.timedelta(hours=24)
+
+        HAPPENED_YESTERDAY = same_day([date, yesterday])
+        HAPPENED_TODAY = same_day([date, moment])
+        HAPPENED_TOMORROW = same_day([date, tomorrow])
+
+        W = moment.hour < HOUR_LIMIT
+        Q = date.hour < HOUR_LIMIT
+
+        DAY_WORK = HAPPENED_TODAY and not W and not Q
+        NIGHT_WORK = HAPPENED_TODAY and Q and W
+        YESTERDAY_WORK = HAPPENED_YESTERDAY and W and not Q
+        NEXT_NIGHT = HAPPENED_TOMORROW and Q and not W
+
+        Conditions = [
+            DAY_WORK,
+            NIGHT_WORK,
+            YESTERDAY_WORK,
+            NEXT_NIGHT
+        ]
+
+        if Verbose == 2:
+            print(date.strftime(DATE_FORMAT_LOG))
+            print(Conditions)
+
+        if shifted.date() == date.date():
+            CurrentDates.append(date)
+        #if any(Conditions):
+        #    CurrentDates.append(date)
+
+    Count = len(CurrentDates)
+    if Verbose:
+        print(f"Summary for {moment.strftime(DATE_FORMAT_SHOW)}.")
+        print(f"Pomodoro sessions completed sucessfully: {Count}")
+        print()
+
+    return CurrentDates
+
+
+def plot_days(config):
+
+    days = check_entries(config, Verbose=2)
+
+    matrix = np.zeros(shape=(len(days), 24 * 6))
+    for d, day in enumerate(days):
+        for date in day:
+            start = date.hour * 6 + round(date.minute / 10)
+            end = start + 3
+            matrix[d, start:end] = 1
+
+    plt.matshow(matrix)
+    locs, labels = plt.xticks()
+
+    def to_time(x):
+        H = x // 6
+        M = x % 6 * 10
+        return f"%.2i:%.2i" % (H, M)
+
+    new_ticks = map(to_time, locs)
+    plt.xticks(ticks=locs, labels=new_ticks)
+
+    plt.show()
+
+
+def autofill(config, start_time, identifier, n):
+
+    H = int(start_time[:2])
+    M = int(start_time[2:])
+    start_date = datetime.datetime.now().replace(
+        hour=H, minute=M, second=0)
+
+    for _ in range(n):
+        log(config.log_path, f"{identifier} session.", start_date)
+        start_date += datetime.timedelta(minutes=30)
 
 
 def main():
     Action = sys.argv.pop(1)
+
+    Identifier = "research"
+    if len(sys.argv) > 1:
+        if not sys.argv[1].startswith("-"):
+            Identifier = sys.argv.pop(1)
     config = configuration.Config()
 
     session_exists = os.path.isfile(config.session_file)
 
     if Action == "create":
         if session_exists:
+            session = Session(config.session_file)
+            if session.get_seconds_left() > 0:
+                return
             os.remove(config.session_file)
+
         new_session = Session(config.session_file)
         new_session.write_session_file()
 
-        log(config.log_path, "New session.")
+        log(config.log_path, f"{Identifier} session.")
 
     elif Action == "pause":
         if not session_exists:
@@ -149,6 +292,28 @@ def main():
     elif Action == "delete":
         os.remove(config.session_file)
         log(config.log_path, "Session aborted.")
+
+    elif Action == "check":
+        check_entries(config, identifier=Identifier)
+
+    elif Action == "plot":
+        plot_days(config)
+
+    elif Action == "autofill":
+        try:
+            start_time = sys.argv[1]
+            number = sys.argv[2]
+        except IndexError:
+            print("Wrong arguments for autofill (sample args: research 1700 2).")
+            sys.exit(1)
+
+        try:
+            number = int(number)
+        except:
+            print("Bad 'number' argument.")
+            sys.exit(1)
+
+        autofill(config, start_time, Identifier, number)
 
 
 if __name__ == '__main__':

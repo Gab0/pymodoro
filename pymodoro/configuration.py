@@ -28,13 +28,13 @@ class Config(object):
         # Cosmetics
         self.colorize_output = True
         self.progress_bar_size = 8
-        
+
         # Times
         self.session_duration_in_minutes = 25
         self.session_duration_in_seconds = self.session_duration_in_minutes * 60 + 1
         self.break_duration_in_minutes = 5
         self.break_duration_in_seconds = self.break_duration_in_minutes * 60
-        self.update_interval_in_seconds = 5
+        self.update_interval_in_seconds = 1
 
         # Progress Bar
         self.total_number_of_marks = self.session_duration_in_minutes
@@ -95,7 +95,6 @@ class Config(object):
             self.break_sound_file = user_break_sound
         if os.path.exists(user_tick_sound):
             self.tick_sound_file = user_tick_sound
-
 
     def load_from_file(self):
         # We need to set the default for oneline in the parser here so
