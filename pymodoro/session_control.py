@@ -32,10 +32,10 @@ class Session():
     def write_session_file(self):
         with open(self.filepath, 'w') as f:
             f.write(self.ID + "\n")
-            f.write(self.CREATION_DATE.strftime(DATE_FORMAT) + "\n")
+            f.write(self.CREATION_DATE.strftime(DATE_FORMAT_LOG) + "\n")
             f.write(f"{self.WORK} {self.REST}\n")
             for e in self.Events:
-                f.write(datetime.strftime(e, self.DATE_FORMAT) + "\n")
+                f.write(datetime.strftime(e, self.DATE_FORMAT_LOG) + "\n")
 
     @property
     def is_paused(self) -> bool:
@@ -58,7 +58,7 @@ class Session():
             content = f.readline()
             self.CREATION_DATE = datetime.datetime.strptime(
                 content.strip("\n"),
-                DATE_FORMAT
+                DATE_FORMAT_LOG
             )
 
             content = f.readline()
@@ -69,7 +69,7 @@ class Session():
                 try:
                     e = datetime.datetime.strptime(
                         event.strip("\n"),
-                        DATE_FORMAT
+                        DATE_FORMAT_LOG
                     )
                     self.Events.append(e)
                 except ValueError:
@@ -181,37 +181,10 @@ def check_entries_day(Dates, moment, Verbose: int = 1) -> int:
             if not OLD:
                 continue
 
-        shifted = moment - datetime.timedelta(hours=HOUR_LIMIT)
-        yesterday = moment - datetime.timedelta(hours=24)
-        tomorrow = moment + datetime.timedelta(hours=24)
+        shifted = date - datetime.timedelta(hours=HOUR_LIMIT)
 
-        HAPPENED_YESTERDAY = same_day([date, yesterday])
-        HAPPENED_TODAY = same_day([date, moment])
-        HAPPENED_TOMORROW = same_day([date, tomorrow])
-
-        W = moment.hour < HOUR_LIMIT
-        Q = date.hour < HOUR_LIMIT
-
-        DAY_WORK = HAPPENED_TODAY and not W and not Q
-        NIGHT_WORK = HAPPENED_TODAY and Q and W
-        YESTERDAY_WORK = HAPPENED_YESTERDAY and W and not Q
-        NEXT_NIGHT = HAPPENED_TOMORROW and Q and not W
-
-        Conditions = [
-            DAY_WORK,
-            NIGHT_WORK,
-            YESTERDAY_WORK,
-            NEXT_NIGHT
-        ]
-
-        if Verbose == 2:
-            print(date.strftime(DATE_FORMAT_LOG))
-            print(Conditions)
-
-        if shifted.date() == date.date():
+        if shifted.date() == moment.date():
             CurrentDates.append(date)
-        #if any(Conditions):
-        #    CurrentDates.append(date)
 
     Count = len(CurrentDates)
     if Verbose:
