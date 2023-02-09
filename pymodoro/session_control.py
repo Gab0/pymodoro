@@ -35,7 +35,7 @@ class Session():
             f.write(self.CREATION_DATE.strftime(DATE_FORMAT_LOG) + "\n")
             f.write(f"{self.WORK} {self.REST}\n")
             for e in self.Events:
-                f.write(datetime.strftime(e, self.DATE_FORMAT_LOG) + "\n")
+                f.write(datetime.datetime.strftime(e, DATE_FORMAT_LOG) + "\n")
 
     @property
     def is_paused(self) -> bool:
@@ -260,14 +260,16 @@ def main():
             return
         with open(config.session_file, 'a') as f:
             now = datetime.datetime.now()
-            f.write(now.strftime(DATE_FORMAT) + "\n")
+            f.write(now.strftime(DATE_FORMAT_LOG) + "\n")
 
     elif Action == "delete":
         os.remove(config.session_file)
         log(config.log_path, "Session aborted.")
 
     elif Action == "check":
-        check_entries(config, identifier=Identifier)
+        total = check_entries(config, past_days=30, identifier=Identifier)
+        ts = [len(x) for x in total]
+        print(f"Total: {sum(ts)}")
 
     elif Action == "plot":
         plot_days(config)
