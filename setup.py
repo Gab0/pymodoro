@@ -17,7 +17,8 @@ setup(
             "pymodoroi3 = pymodoro.pymodoroi3:main",
             "pymodoro_ctrl = pymodoro.session_control:main",
             "pymodoro_routine = pymodoro.routine_control:main",
-            "pymodoro_signal = pymodoro.signal:main"
+            "pymodoro_signal = pymodoro.signal:main",
+            "pymodoro_session = pymodoro.session_selector:main"
         ]
     },
 )
