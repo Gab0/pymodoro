@@ -7,12 +7,13 @@ import configparser
 class Config(object):
     """Load config from defaults, file and arguments."""
 
-    def __init__(self):
+    def __init__(self, args=True):
 
         self.load_defaults()
         self.load_user_data()
         self.load_from_file()
-        self.load_from_args()
+        if args:
+            self.load_from_args()
 
     def load_defaults(self):
 

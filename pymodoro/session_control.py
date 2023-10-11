@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import Any, List, Optional
+import argparse
 import re
 import os
 import datetime
@@ -13,6 +14,33 @@ from . import configuration
 DATE_FORMAT: str = "%H:%M:%S"
 DATE_FORMAT_LOG: str = "%d/%m - %H:%M:%S"
 DATE_FORMAT_SHOW: str = "%d/%m - %A - %H:%M:%S"
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+
+    actions = parser.add_subparsers(title="check", dest="action")
+
+    create = actions.add_parser("create")
+    create.add_argument(dest="identifier")
+
+    check = actions.add_parser("check")
+
+    _pause = actions.add_parser("pause")
+    _plot = actions.add_parser("plot")
+    _autofill = actions.add_parser("autofill")
+    _delete = actions.add_parser("delete")
+
+    check.add_argument(
+        "-d",
+        "--past-days",
+        type=int,
+        help="Days back to search for.",
+        default=30
+    )
+
+    check.add_argument(dest="queries", nargs="*")
+    return parser.parse_args()
 
 
 class Session():
@@ -134,7 +162,7 @@ def log(log_path: str, message, date=datetime.datetime.now()):
         f.write(f"[{now_str}] {message}\n")
 
 
-def check_entries(config, past_days=7, identifier: str = "research", Verbose: int = 1) -> List[int]:
+def check_entries(config, past_days=7, identifier: str = "research", Verbose: int = 1) -> List[List[datetime.datetime]]:
     now = datetime.datetime.now()
     Dates = []
     with open(config.log_path, 'r', encoding='utf-8') as f:
@@ -145,21 +173,24 @@ def check_entries(config, past_days=7, identifier: str = "research", Verbose: in
                 Dates.append(date)
 
     YEAR = now.year
-    for i, date in enumerate(Dates):
-        if not i:
-            continue
-        if date.month < Dates[i - 1].month:
-            YEAR += 1
-        Dates[i] = Dates[i].replace(year=YEAR)
-        
-    year_adjust = YEAR - now.year
-    Dates = [d.replace(year=d.year - year_adjust) for d in Dates]
+    Dates = [d.replace(year=YEAR) for d in Dates]
+
+    preliminary = [
+        abs((now - date).total_seconds())
+        for date in Dates
+        if abs((now - date).total_seconds()) < past_days * 24 * 3600
+    ]
 
     Results = []
     for day in range(past_days, -1, -1):
         moment = now - datetime.timedelta(hours=24*day)
         res = check_entries_day(Dates, moment, Verbose)
         Results.append(res)
+
+    n_expected = len(preliminary)
+    n_results = sum(len(r) for r in Results)
+    if n_expected != n_results:
+        print(f"Bad calculation! Expected {n_expected} but got {n_results}.")
 
     return Results
 
@@ -168,7 +199,7 @@ def same_day(dates=List[datetime.datetime]) -> bool:
     return len(list(set([(d.day, d.month, d.year) for d in dates]))) == 1
 
 
-def check_entries_day(Dates, moment, Verbose: int = 1) -> int:
+def check_entries_day(Dates: List[datetime.datetime], moment: datetime.datetime, Verbose: int = 1) -> List[datetime.datetime]:
 
     INTERVAL_MIN = 20
     HOUR_LIMIT = 7
@@ -176,7 +207,7 @@ def check_entries_day(Dates, moment, Verbose: int = 1) -> int:
     CurrentDates = []
     for d, date in enumerate(Dates):
         if d:
-            OLD = (date - Dates[d - 1]).seconds / 60 > INTERVAL_MIN
+            OLD = abs((date - Dates[d - 1]).total_seconds()) / 60 > INTERVAL_MIN
 
             if not OLD:
                 continue
@@ -233,17 +264,19 @@ def autofill(config, start_time, identifier, n):
 
 
 def main():
-    Action = sys.argv.pop(1)
+
+    options = parse_arguments()
 
     Identifier = "research"
     if len(sys.argv) > 1:
         if not sys.argv[1].startswith("-"):
             Identifier = sys.argv.pop(1)
-    config = configuration.Config()
+
+    config = configuration.Config(args=False)
 
     session_exists = os.path.isfile(config.session_file)
 
-    if Action == "create":
+    if options.action == "create":
         if session_exists:
             session = Session(config.session_file)
             if session.get_seconds_left() > 0:
@@ -253,28 +286,29 @@ def main():
         new_session = Session(config.session_file)
         new_session.write_session_file()
 
-        log(config.log_path, f"{Identifier} session.")
+        log(config.log_path, f"{options.identifier} session.")
 
-    elif Action == "pause":
+    elif options.action == "pause":
         if not session_exists:
             return
-        with open(config.session_file, 'a') as f:
+        with open(config.session_file, 'a', encoding="utf-8") as f:
             now = datetime.datetime.now()
             f.write(now.strftime(DATE_FORMAT_LOG) + "\n")
 
-    elif Action == "delete":
+    elif options.action == "delete":
         os.remove(config.session_file)
         log(config.log_path, "Session aborted.")
 
-    elif Action == "check":
-        total = check_entries(config, past_days=30, identifier=Identifier)
-        ts = [len(x) for x in total]
-        print(f"Total: {sum(ts)}")
+    elif options.action == "check":
+        for Identifier in options.queries:
+            total = check_entries(config, options.past_days, identifier=Identifier)
+            ts = [len(x) for x in total]
+            print(f"Total: {sum(ts)}")
 
-    elif Action == "plot":
+    elif options.action == "plot":
         plot_days(config)
 
-    elif Action == "autofill":
+    elif options.action == "autofill":
         try:
             start_time = sys.argv[1]
             number = sys.argv[2]
