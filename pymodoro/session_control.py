@@ -13,7 +13,7 @@ from . import configuration
 
 DATE_FORMAT: str = "%H:%M:%S"
 DATE_FORMAT_LOG: str = "%d/%m/%y - %H:%M:%S"
-DATE_FORMAT_SHOW: str = "%d/%m - %A - %H:%M:%S"
+DATE_FORMAT_SHOW: str = "%d/%m/%y - %A - %H:%M:%S"
 
 
 def parse_arguments():
