@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from . import configuration
 
 DATE_FORMAT: str = "%H:%M:%S"
-DATE_FORMAT_LOG: str = "%d/%m - %H:%M:%S"
+DATE_FORMAT_LOG: str = "%d/%m/%y - %H:%M:%S"
 DATE_FORMAT_SHOW: str = "%d/%m - %A - %H:%M:%S"
 
 
@@ -171,9 +171,6 @@ def check_entries(config, past_days=7, identifier: str = "research", Verbose: in
             if res:
                 date = datetime.datetime.strptime(res[0], DATE_FORMAT_LOG)
                 Dates.append(date)
-
-    YEAR = now.year
-    Dates = [d.replace(year=YEAR) for d in Dates]
 
     preliminary = [
         abs((now - date).total_seconds())
