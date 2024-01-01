@@ -281,7 +281,7 @@ class Pymodoro(object):
             fine_grain_measure = seconds % seconds_per_mark
 
             number_of_full_marks = int(seconds // seconds_per_mark)
-            print(number_of_full_marks)
+
             if not fine_grain_measure:
                 MM = empty_mark_character
             elif fine_grain_measure > seconds_per_mark / 2:
